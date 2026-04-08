@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reduce Snowball Analogy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom, #e0f2fe, #f8fafc);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #simulation-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .math-card {
+            transition: all 0.3s ease;
+        }
+        .active-math {
+            transform: scale(1.05);
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-4xl w-full space-y-6">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-slate-800">The .reduce() Snowball</h1>
+            <p class="text-slate-600 mt-2">Visualizing how an array reduces to a single value.</p>
+        </div>
+
+        <!-- Simulation Area -->
+        <div id="simulation-container">
+            <canvas id="snowCanvas"></canvas>
+            
+            <!-- Floating UI Overlay -->
+            <div class="absolute top-4 left-4 bg-white/80 backdrop-blur p-3 rounded-lg border border-slate-200 shadow-sm">
+                <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Accumulator</div>
+                <div id="acc-display" class="text-2xl font-mono font-bold text-blue-600">0</div>
+            </div>
+        </div>
+
+        <!-- Controls and Logic -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="font-bold text-slate-700 mb-4">Input Array</h2>
+                <div class="flex flex-wrap gap-2 mb-4" id="array-pills">
+                    <!-- Array elements will appear here -->
+                </div>
+                <button id="start-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors shadow-lg shadow-blue-200">
+                    Roll Snowball!
+                </button>
+                <button id="reset-btn" class="w-full mt-2 py-2 text-slate-500 hover:text-slate-700 font-medium transition-colors">
+                    Reset
+                </button>
+            </div>
+
+            <div class="md:col-span-2 bg-slate-900 p-6 rounded-xl shadow-inner text-blue-300 font-mono text-sm relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-2 opacity-10">
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                </div>
+                <h2 class="text-slate-400 mb-3 border-b border-slate-800 pb-2">// JavaScript Logic</h2>
+                <div class="space-y-1">
+                    <p><span class="text-pink-400">const</span> numbers = [<span id="code-array">10, 20, 15, 30</span>];</p>
+                    <p><span class="text-pink-400">const</span> result = numbers.reduce((acc, curr) => {</p>
+                    <p class="pl-4 text-emerald-400 font-bold" id="code-line">  <span class="text-slate-500">// Waiting to roll...</span></p>
+                    <p class="pl-4"><span class="text-pink-400">return</span> acc + curr;</p>
+                    <p>}, <span class="text-orange-300">0</span>);</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('snowCanvas');
+        const ctx = canvas.getContext('2d');
+        const accDisplay = document.getElementById('acc-display');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const arrayPills = document.getElementById('array-pills');
+        const codeArray = document.getElementById('code-array');
+        const codeLine = document.getElementById('code-line');
+
+        // Configuration
+        const data = [10, 20, 15, 30];
+        let accumulator = 0;
+        let currentIndex = -1;
+        let isAnimating = false;
+        let animationId;
+
+        // Snowball Object
+        const snowball = {
+            x: -50,
+            y: 0,
+            baseRadius: 15,
+            currentRadius: 15,
+            targetRadius: 15,
+            rotation: 0,
+            speed: 3
+        };
+
+        // Targets (Snow patches)
+        let targets = [];
+
+        function init() {
+            resize();
+            createTargets();
+            renderPills();
+            draw();
+            
+            window.addEventListener('resize', resize);
+        }
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            snowball.y = canvas.height - 60;
+            if (targets.length) createTargets(); // Re-position on resize
+        }
+
+        function createTargets() {
+            targets = data.map((val, i) => ({
+                value: val,
+                x: (canvas.width / (data.length + 1)) * (i + 1),
+                y: canvas.height - 40,
+                collected: false,
+                pulse: 0
+            }));
+        }
+
+        function renderPills() {
+            arrayPills.innerHTML = '';
+            data.forEach((val, i) => {
+                const pill = document.createElement('div');
+                pill.className = `px-3 py-1 rounded-full bg-slate-100 text-slate-600 font-bold border-2 border-transparent transition-all pill-${i}`;
+                pill.innerText = val;
+                arrayPills.appendChild(pill);
+            });
+            codeArray.innerText = data.join(', ');
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Ground
+            ctx.fillStyle = '#f1f5f9';
+            ctx.beginPath();
+            ctx.rect(0, canvas.height - 40, canvas.width, 40);
+            ctx.fill();
+
+            // Draw Snow Patches (Current Values)
+            targets.forEach((t, i) => {
+                if (!t.collected) {
+                    ctx.save();
+                    const pulse = Math.sin(Date.now() / 200) * 5;
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, 10 + pulse, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Label
+                    ctx.fillStyle = '#475569';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(t.value, t.x, t.y - 25 - pulse);
+                    ctx.restore();
+                }
+            });
+
+            // Draw Snowball (Accumulator)
+            ctx.save();
+            ctx.translate(snowball.x, snowball.y - snowball.currentRadius + 20);
+            ctx.rotate(snowball.rotation);
+            
+            // Snowball body
+            const gradient = ctx.createRadialGradient(-5, -5, 0, 0, 0, snowball.currentRadius);
+            gradient.addColorStop(0, '#ffffff');
+            gradient.addColorStop(1, '#e2e8f0');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, snowball.currentRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Texture/Detail
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(-snowball.currentRadius/3, -snowball.currentRadius/3, snowball.currentRadius/4, 0, Math.PI*2);
+            ctx.stroke();
+
+            ctx.restore();
+
+            if (isAnimating) {
+                update();
+                animationId = requestAnimationFrame(draw);
+            }
+        }
+
+        function update() {
+            // Move snowball
+            snowball.x += snowball.speed;
+            snowball.rotation += 0.1;
+
+            // Smooth radius growth
+            if (snowball.currentRadius < snowball.targetRadius) {
+                snowball.currentRadius += 0.5;
+            }
+
+            // Check collisions
+            targets.forEach((t, i) => {
+                if (!t.collected && Math.abs(snowball.x - t.x) < 20) {
+                    collectPatch(i);
+                }
+            });
+
+            // End of run
+            if (snowball.x > canvas.width + 100) {
+                isAnimating = false;
+                startBtn.disabled = false;
+                startBtn.innerText = "Roll Again!";
+                codeLine.innerHTML = `  <span class="text-blue-400">// Done! Final result: ${accumulator}</span>`;
+            }
+        }
+
+        function collectPatch(index) {
+            const target = targets[index];
+            target.collected = true;
+            
+            const prevAcc = accumulator;
+            accumulator += target.value;
+            
+            // Update UI
+            accDisplay.innerText = accumulator;
+            accDisplay.classList.add('scale-125');
+            setTimeout(() => accDisplay.classList.remove('scale-125'), 200);
+
+            // Update Math Display
+            codeLine.innerHTML = `  <span class="text-white">acc</span>(${prevAcc}) + <span class="text-white">curr</span>(${target.value}) = <span class="text-emerald-400">${accumulator}</span>`;
+
+            // Update Pills
+            document.querySelectorAll('#array-pills div').forEach(p => p.classList.remove('active-math', 'bg-blue-100'));
+            const currentPill = document.querySelector(`.pill-${index}`);
+            currentPill.classList.add('active-math', 'bg-blue-100');
+
+            // Grow snowball
+            // We increase radius based on a square root to prevent it getting TOO huge
+            snowball.targetRadius = snowball.baseRadius + Math.sqrt(accumulator) * 4;
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            
+            // Reset state for new run
+            accumulator = 0;
+            accDisplay.innerText = "0";
+            snowball.x = -50;
+            snowball.currentRadius = snowball.baseRadius;
+            snowball.targetRadius = snowball.baseRadius;
+            targets.forEach(t => t.collected = false);
+            isAnimating = true;
+            startBtn.disabled = true;
+            startBtn.innerText = "Rolling...";
+            
+            draw();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isAnimating = false;
+            cancelAnimationFrame(animationId);
+            accumulator = 0;
+            accDisplay.innerText = "0";
+            snowball.x = -50;
+            snowball.currentRadius = snowball.baseRadius;
+            snowball.targetRadius = snowball.baseRadius;
+            targets.forEach(t => t.collected = false);
+            startBtn.disabled = false;
+            startBtn.innerText = "Roll Snowball!";
+            codeLine.innerHTML = `  <span class="text-slate-500">// Waiting to roll...</span>`;
+            document.querySelectorAll('#array-pills div').forEach(p => p.classList.remove('active-math', 'bg-blue-100'));
+            draw();
+        });
+
+        // Start everything
+        init();
+    </script>
+</body>
+</html>
